@@ -5,6 +5,7 @@
 #include <print>
 #include <random>
 #include <stdexcept>
+#include <string>
 #include <vector>
 #include <ncurses.h>
 #include "game_model.hpp"
@@ -16,9 +17,11 @@ namespace snake {
     exit,
   };
   [[nodiscard]] input_result parse_input(game_model&);
-  void draw_snake(const std::vector<point_t>&);
-  void draw_food(point_t);
-  void draw_frame(const game_model&);
+  void draw_snake(WINDOW*, const std::vector<point_t>&);
+  void draw_food(WINDOW*, point_t);
+  void draw_frame(WINDOW*, const game_model&);
+  void draw_gameover(WINDOW*, const game_model&);
+  void print_center(WINDOW*, std::string_view, int);
 }
 
 struct snake::ncurses_guard {
@@ -51,27 +54,42 @@ snake::ncurses_guard::~ncurses_guard() {
   endwin();
 }
 
-void snake::draw_snake(const std::vector<point_t>& points) {
-  const static auto printer = [](auto p) { mvprintw(p.y, p.x * 2, "%s", "[]"); };
-  attron(COLOR_PAIR(ncurses_guard::col_yellow));
+void snake::draw_snake(WINDOW* win, const std::vector<point_t>& points) {
+  const static auto printer = [win](auto p) { mvwprintw(win, p.y, p.x * 2, "%s", "[]"); };
+  wattron(win, COLOR_PAIR(ncurses_guard::col_yellow));
   printer(points.front());
-  attroff(COLOR_PAIR(ncurses_guard::col_yellow));
-  attron(COLOR_PAIR(ncurses_guard::col_green));
+  wattroff(win, COLOR_PAIR(ncurses_guard::col_yellow));
+  wattron(win, COLOR_PAIR(ncurses_guard::col_green));
   std::for_each(points.begin() + 1, points.end(), printer);
-  attroff(COLOR_PAIR(ncurses_guard::col_green));
+  wattroff(win, COLOR_PAIR(ncurses_guard::col_green));
 }
 
-void snake::draw_food(const point_t food) {
-  attron(COLOR_PAIR(ncurses_guard::col_red));
-  mvprintw(food.y, food.x * 2, "%s", "[]");
-  attroff(COLOR_PAIR(ncurses_guard::col_red));
+void snake::draw_food(WINDOW* win, const point_t food) {
+  wattron(win, COLOR_PAIR(ncurses_guard::col_red));
+  mvwprintw(win, food.y, food.x * 2, "%s", "[]");
+  wattroff(win, COLOR_PAIR(ncurses_guard::col_red));
 }
 
-void snake::draw_frame(const game_model& model) {
-  erase();
-  draw_snake(model.get_snake());
-  draw_food(model.get_food());
-  refresh();
+void snake::draw_frame(WINDOW* win, const game_model& model) {
+  werase(win);
+  box(win, 0, 0);
+  draw_snake(win, model.get_snake());
+  draw_food(win, model.get_food());
+  wrefresh(win);
+}
+
+void snake::draw_gameover(WINDOW* win, const game_model& model) {
+  const auto scores_msg = "Scores: " + std::to_string(model.get_scores());
+  const auto mid_y = getmaxy(win) / 2;
+  print_center(win, "Game Over", mid_y - 1);
+  print_center(win, scores_msg, mid_y);
+  print_center(win, "Press q to exit", mid_y + 1);
+  wrefresh(win);
+}
+
+void snake::print_center(WINDOW* win, const std::string_view str, const int y) {
+  const auto x = (getmaxx(win) - str.size()) / 2;
+  mvwaddnstr(win, y, x, str.data(), str.size());
 }
 
 snake::input_result snake::parse_input(game_model& model) {
@@ -100,11 +118,19 @@ snake::input_result snake::parse_input(game_model& model) {
 
 int main() try {
   const auto guard = snake::ncurses_guard{};
-  snake::game_model model(LINES, COLS / 2);
-  bool is_running = true;
+  const auto height = std::min(LINES, 22);
+  const auto width = std::min(COLS, 42);
+  const auto win = newwin(height, width, 0, 0);
+  auto model = snake::game_model(height, width / 2);
+  auto is_running = true;
   while (model.step() && is_running) {
-    snake::draw_frame(model);
+    snake::draw_frame(win, model);
     is_running = snake::parse_input(model) != snake::input_result::exit;
+  }
+  snake::draw_gameover(win, model);
+  auto ch = getch();
+  while (ch != 'q' && ch != 'Q') {
+    ch = getch();
   }
 } catch (const std::exception& e) {
   std::println(stderr, "Error: {}", e.what());
