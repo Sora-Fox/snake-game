@@ -12,7 +12,8 @@ snake::game_model::game_model(const int rows, const int columns) :
   scores_(0),
   max_x_(columns - 1),
   max_y_(rows - 1),
-  dir_(direction::right) {
+  dir_(direction::right),
+  is_game_over_(false) {
   generate_initial_snake();
   food_ = generate_food();
 }
@@ -29,10 +30,11 @@ void snake::game_model::set_direction(const direction dir) noexcept {
   dir_ = dir;
 }
 
-bool snake::game_model::step() {
+void snake::game_model::step() {
   const auto new_head = apply_direction(snake_.front(), dir_);
-  if (!is_field(new_head) || is_snake(new_head)) {
-    return false;
+  if (!is_field(new_head) || is_snake(new_head) || is_game_over_) {
+    is_game_over_ = true;
+    return;
   }
   snake_.insert(snake_.begin(), new_head);
   if (new_head == food_) {
@@ -41,7 +43,6 @@ bool snake::game_model::step() {
   } else {
     snake_.pop_back();
   }
-  return true;
 }
 
 const std::vector<snake::point_t>& snake::game_model::get_snake() const noexcept {
@@ -54,6 +55,10 @@ snake::point_t snake::game_model::get_food() const noexcept {
 
 std::size_t snake::game_model::get_scores() const noexcept {
   return scores_;
+}
+
+bool snake::game_model::is_game_over() const noexcept {
+  return is_game_over_;
 }
 
 void snake::game_model::generate_initial_snake() {

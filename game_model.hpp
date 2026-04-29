@@ -25,11 +25,12 @@ public:
   explicit game_model(int rows, int columns);
 
   void set_direction(direction) noexcept;
-  [[nodiscard]] bool step();
+  void step();
 
   [[nodiscard]] const std::vector<point_t>& get_snake() const noexcept;
   [[nodiscard]] point_t get_food() const noexcept;
   [[nodiscard]] std::size_t get_scores() const noexcept;
+  [[nodiscard]] bool is_game_over() const noexcept;
 
 private:
   std::vector<point_t> snake_;
@@ -38,6 +39,7 @@ private:
   int max_x_;
   int max_y_;
   direction dir_;
+  bool is_game_over_;
 
   void generate_initial_snake();
   [[nodiscard]] point_t generate_food() const;
