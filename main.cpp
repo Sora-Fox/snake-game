@@ -19,8 +19,9 @@ namespace snake {
   [[nodiscard]] input_result parse_input(game_model&);
   void draw_snake(WINDOW*, const std::vector<point_t>&);
   void draw_food(WINDOW*, point_t);
+  void draw_scores(WINDOW*, std::size_t);
   void draw_frame(WINDOW*, const game_model&);
-  void draw_gameover(WINDOW*, const game_model&);
+  void draw_game_over(WINDOW*, const game_model&);
   void print_center(WINDOW*, std::string_view, int);
 }
 
@@ -70,15 +71,21 @@ void snake::draw_food(WINDOW* win, const point_t food) {
   wattroff(win, COLOR_PAIR(ncurses_guard::col_red));
 }
 
+void snake::draw_scores(WINDOW* win, const std::size_t scores) {
+  const auto max_y = getmaxy(win);
+  print_center(win, "Scores: " + std::to_string(scores), max_y - 1);
+}
+
 void snake::draw_frame(WINDOW* win, const game_model& model) {
   werase(win);
   box(win, 0, 0);
   draw_snake(win, model.get_snake());
   draw_food(win, model.get_food());
+  draw_scores(win, model.get_scores());
   wrefresh(win);
 }
 
-void snake::draw_gameover(WINDOW* win, const game_model& model) {
+void snake::draw_game_over(WINDOW* win, const game_model& model) {
   const auto scores_msg = "Scores: " + std::to_string(model.get_scores());
   const auto mid_y = getmaxy(win) / 2;
   print_center(win, "Game Over", mid_y - 1);
@@ -127,7 +134,7 @@ int main() try {
     snake::draw_frame(win, model);
     is_running = snake::parse_input(model) != snake::input_result::exit;
   }
-  snake::draw_gameover(win, model);
+  snake::draw_game_over(win, model);
   auto ch = getch();
   while (ch != 'q' && ch != 'Q') {
     ch = getch();

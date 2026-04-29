@@ -36,6 +36,7 @@ bool snake::game_model::step() {
   }
   snake_.insert(snake_.begin(), new_head);
   if (new_head == food_) {
+    scores_ += 5;
     food_ = generate_food();
   } else {
     snake_.pop_back();
