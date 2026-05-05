@@ -32,8 +32,11 @@ void snake::game_model::set_direction(const direction dir) noexcept {
 }
 
 void snake::game_model::step() {
+  if (is_game_over_) {
+    return;
+  }
   const auto new_head = apply_direction(snake_.front(), dir_);
-  if (!is_field(new_head) || is_snake(new_head) || is_game_over_) {
+  if (!is_field(new_head) || (is_snake(new_head) && new_head != snake_.back())) {
     is_game_over_ = true;
     return;
   }
