@@ -85,8 +85,13 @@ void snake::x11_gui::close_connection() noexcept {
 
 void snake::x11_gui::run() {
   is_running_ = true;
-  draw_frame();
   auto event = XEvent{};
+  XNextEvent(display_, &event);
+  if (event.type != Expose) {
+    std::println(stderr, "Unexpected first event");
+  }
+  draw_frame();
+  XFlush(display_);
   while (is_running_ && !model_.is_game_over()) {
     while (XPending(display_)) {
       XNextEvent(display_, &event);
@@ -257,8 +262,8 @@ namespace {
   Window create_window(Display* display, Screen* screen) {
     const auto black = XBlackPixelOfScreen(screen);
     const auto root = XRootWindowOfScreen(screen);
-    constexpr static auto h = 740;
-    constexpr static auto w = 1020;
+    constexpr static auto h = 832;
+    constexpr static auto w = 832;
     return XCreateSimpleWindow(display, root, 0, 0, w, h, 0, black, black);
   }
 
