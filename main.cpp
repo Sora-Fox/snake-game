@@ -23,6 +23,7 @@ namespace snake {
     Window win_{};
     GC gc_{};
     game_model model_;
+    Atom wm_delete_;
     int tile_size_ = 0;
     int x_offset_ = 0;
     int y_offset_ = 0;
@@ -62,8 +63,10 @@ snake::x11_gui::x11_gui() :
   win_(create_window(display_, screen_)),
   gc_(XCreateGC(display_, win_, 0, nullptr)),
   model_(24, 24),
+  wm_delete_(XInternAtom(display_, "WM_DELETE_WINDOW", false)),
   is_running_(false) {
   XSelectInput(display_, win_, ExposureMask | KeyPressMask);
+  XSetWMProtocols(display_, win_, &wm_delete_, 1);
   XMapWindow(display_, win_);
   XStoreName(display_, win_, "Snake Game");
   update_tile_size_and_offset();
@@ -92,12 +95,14 @@ void snake::x11_gui::run() {
   }
   draw_frame();
   XFlush(display_);
-  while (is_running_ && !model_.is_game_over()) {
-    while (XPending(display_)) {
+  while (is_running_) {
+    while (is_running_ && XPending(display_)) {
       XNextEvent(display_, &event);
-      handle_event(event);
+      handle_event(event); // may set is_running = false
     }
-    perform_step();
+    /* clang-format off */ if (!is_running_) { break;}
+    perform_step();  // may set is_running = false
+    if (!is_running_) { break;} /* clang-format on */
     XFlush(display_);
     std::this_thread::sleep_for(std::chrono::milliseconds(150));
   }
@@ -108,6 +113,10 @@ void snake::x11_gui::perform_step() {
   const auto old_tail = model_.get_snake().back();
   const auto old_head = model_.get_snake().front();
   model_.step();
+  if (model_.is_game_over()) {
+    is_running_ = false;
+    return;
+  }
   const auto new_head = model_.get_snake().front();
   if (new_head == old_food) {
     const auto new_food = model_.get_food();
@@ -120,6 +129,11 @@ void snake::x11_gui::perform_step() {
 }
 
 void snake::x11_gui::handle_event(XEvent& event) {
+  if (event.type == ClientMessage && (Atom)event.xclient.data.l[0] == wm_delete_) {
+    std::println(stderr, "WM delete window request");
+    is_running_ = false;
+    return;
+  }
   switch (event.type) {
   case Expose:
     handle_expose(event);
