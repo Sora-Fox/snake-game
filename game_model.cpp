@@ -76,9 +76,11 @@ bool snake::game_model::is_game_over() const noexcept {
 
 void snake::game_model::generate_initial_snake() {
   const auto [mid_x, mid_y] = point_t{ max_x_ / 2, max_y_ / 2 };
+  snake_.emplace_back(mid_x + 2, mid_y);
   snake_.emplace_back(mid_x + 1, mid_y);
   snake_.emplace_back(mid_x + 0, mid_y);
   snake_.emplace_back(mid_x - 1, mid_y);
+  snake_.emplace_back(mid_x - 2, mid_y);
 }
 
 snake::point_t snake::game_model::generate_food() const {
