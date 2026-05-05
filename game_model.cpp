@@ -12,6 +12,7 @@ snake::game_model::game_model(const int rows, const int columns) :
   scores_(0),
   max_x_(columns - 1),
   max_y_(rows - 1),
+  prev_dir_(direction::right),
   dir_(direction::right),
   is_game_over_(false) {
   generate_initial_snake();
@@ -20,10 +21,10 @@ snake::game_model::game_model(const int rows, const int columns) :
 
 void snake::game_model::set_direction(const direction dir) noexcept {
   auto is_invalid = false;
-  is_invalid = is_invalid || (dir_ == direction::up && dir == direction::down);
-  is_invalid = is_invalid || (dir_ == direction::down && dir == direction::up);
-  is_invalid = is_invalid || (dir_ == direction::left && dir == direction::right);
-  is_invalid = is_invalid || (dir_ == direction::right && dir == direction::left);
+  is_invalid = is_invalid || (prev_dir_ == direction::up && dir == direction::down);
+  is_invalid = is_invalid || (prev_dir_ == direction::down && dir == direction::up);
+  is_invalid = is_invalid || (prev_dir_ == direction::left && dir == direction::right);
+  is_invalid = is_invalid || (prev_dir_ == direction::right && dir == direction::left);
   if (is_invalid) {
     return;
   }
@@ -43,6 +44,15 @@ void snake::game_model::step() {
   } else {
     snake_.pop_back();
   }
+  prev_dir_ = dir_;
+}
+
+std::size_t snake::game_model::rows() const noexcept {
+  return max_y_ + 1;
+}
+
+std::size_t snake::game_model::cols() const noexcept {
+  return max_x_ + 1;
 }
 
 const std::vector<snake::point_t>& snake::game_model::get_snake() const noexcept {

@@ -27,6 +27,9 @@ public:
   void set_direction(direction) noexcept;
   void step();
 
+  [[nodiscard]] std::size_t rows() const noexcept;
+  [[nodiscard]] std::size_t cols() const noexcept;
+
   [[nodiscard]] const std::vector<point_t>& get_snake() const noexcept;
   [[nodiscard]] point_t get_food() const noexcept;
   [[nodiscard]] std::size_t get_scores() const noexcept;
@@ -38,6 +41,7 @@ private:
   point_t food_;
   int max_x_;
   int max_y_;
+  direction prev_dir_;
   direction dir_;
   bool is_game_over_;
 
