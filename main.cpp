@@ -61,10 +61,11 @@ snake::x11_gui::x11_gui() :
   screen_(get_screen(display_)),
   win_(create_window(display_, screen_)),
   gc_(XCreateGC(display_, win_, 0, nullptr)),
-  model_(32, 32),
+  model_(24, 24),
   is_running_(false) {
   XSelectInput(display_, win_, ExposureMask | KeyPressMask);
   XMapWindow(display_, win_);
+  XStoreName(display_, win_, "Snake Game");
   update_tile_size_and_offset();
   std::println(stderr, "Vendor  {}", XServerVendor(display_));
   std::println(stderr, "Release {}", XVendorRelease(display_));
@@ -86,13 +87,14 @@ void snake::x11_gui::run() {
   is_running_ = true;
   draw_frame();
   auto event = XEvent{};
-  while (is_running_) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+  while (is_running_ && !model_.is_game_over()) {
     while (XPending(display_)) {
       XNextEvent(display_, &event);
       handle_event(event);
     }
     perform_step();
+    XFlush(display_);
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
   }
 }
 
