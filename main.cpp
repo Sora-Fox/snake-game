@@ -38,12 +38,10 @@ namespace snake {
     void handle_keypress(XEvent&);
 
     void draw_tile(int x, int y, unsigned long color);
-    void draw_bg_tile(int x, int y);
+    void clear_tile(int x, int y);
     void draw_snake_head_tile(int x, int y);
     void draw_snake_body_tile(int x, int y);
-    void draw_food_tile(int x, int y);
 
-    void draw_bg();
     void draw_snake();
     void draw_food();
     void draw_border();
@@ -119,10 +117,9 @@ void snake::x11_gui::perform_step() {
   }
   const auto new_head = model_.get_snake().front();
   if (new_head == old_food) {
-    const auto new_food = model_.get_food();
-    draw_food_tile(new_food.x, new_food.y);
+    draw_food();
   } else {
-    draw_bg_tile(old_tail.x, old_tail.y);
+    clear_tile(old_tail.x, old_tail.y);
   }
   draw_snake_body_tile(old_head.x, old_head.y);
   draw_snake_head_tile(new_head.x, new_head.y);
@@ -148,20 +145,8 @@ void snake::x11_gui::handle_expose(const XEvent& event) {
   if (event.xexpose.count != 0) {
     return;
   }
-  update_tile_size_and_offset();
   std::println(stderr, "Expose");
-#if 0
-  XSetForeground(display_, gc_, 0xFF0000);
-  for (int x = 0; x != model_.cols(); ++x) {
-    for (int y = 0; y != model_.rows(); ++y) {
-      unsigned long color = 0x888888;
-      if (x % 2 == y % 2) {
-        color = 0x444444;
-      }
-      draw_tile(x, y, color);
-    }
-  }
-#endif
+  update_tile_size_and_offset();
   draw_frame();
 }
 
@@ -207,9 +192,10 @@ void snake::x11_gui::draw_tile(int x, int y, unsigned long color) {
   XFillRectangle(display_, win_, gc_, x_coord, y_coord, tile_size_, tile_size_);
 }
 
-void snake::x11_gui::draw_bg_tile(int x, int y) {
-  const auto color = XBlackPixelOfScreen(screen_);
-  draw_tile(x, y, color);
+void snake::x11_gui::clear_tile(int x, int y) {
+  const auto x_coord = x * tile_size_ + x_offset_;
+  const auto y_coord = y * tile_size_ + y_offset_;
+  XClearArea(display_, win_, x_coord, y_coord, tile_size_, tile_size_, false);
 }
 
 void snake::x11_gui::draw_snake_head_tile(int x, int y) {
@@ -222,43 +208,30 @@ void snake::x11_gui::draw_snake_body_tile(int x, int y) {
   draw_tile(x, y, color);
 }
 
-void snake::x11_gui::draw_food_tile(int x, int y) {
-  const auto color = 0xFF0000;
-  draw_tile(x, y, color);
-}
-
-void snake::x11_gui::draw_bg() {
-  const auto color = XBlackPixelOfScreen(screen_);
-  auto attrs = XWindowAttributes{};
-  XGetWindowAttributes(display_, win_, &attrs);
-  XSetForeground(display_, gc_, color);
-  XFillRectangle(display_, win_, gc_, 0, 0, attrs.width, attrs.height);
-}
-
 void snake::x11_gui::draw_snake() {
   const auto& snake = model_.get_snake();
   const auto head = snake.front();
   draw_snake_head_tile(head.x, head.y);
   for (auto i = snake.begin() + 1; i != snake.end(); ++i) {
-    const auto& p = *i;
-    draw_snake_body_tile(p.x, p.y);
+    draw_snake_body_tile(i->x, i->y);
   }
 }
 
 void snake::x11_gui::draw_food() {
+  const static auto color = 0xFF0000;
   const auto food = model_.get_food();
-  draw_food_tile(food.x, food.y);
+  draw_tile(food.x, food.y, color);
 }
 
 void snake::x11_gui::draw_border() {
-  const auto white = XWhitePixelOfScreen(screen_);
+  const static auto white = XWhitePixelOfScreen(screen_);
   XSetForeground(display_, gc_, white);
   XDrawRectangle(display_, win_, gc_, x_offset_ - 1, y_offset_ - 1,
       model_.cols() * tile_size_ + 1, model_.rows() * tile_size_ + 1);
 }
 
 void snake::x11_gui::draw_frame() {
-  draw_bg();
+  XClearWindow(display_, win_);
   draw_snake();
   draw_food();
   draw_border();
