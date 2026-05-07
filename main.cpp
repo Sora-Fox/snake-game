@@ -10,44 +10,71 @@
 #include "game_model.hpp"
 
 namespace snake {
-  class x11_gui final {
-  public:
-    x11_gui();
-    ~x11_gui();
-
-    void run();
-
-  private:
-    Display* const display_ = nullptr;
-    Screen* const screen_ = nullptr;
-    Window win_{};
-    GC gc_{};
-    game_model model_;
-    Atom wm_delete_;
-    int tile_size_ = 0;
-    int x_offset_ = 0;
-    int y_offset_ = 0;
-    bool is_running_ = false;
-
-    void update_tile_size_and_offset();
-    void close_connection() noexcept;
-    void perform_step();
-
-    void handle_event(XEvent&);
-    void handle_expose(const XEvent&);
-    void handle_keypress(XEvent&);
-
-    void draw_tile(int x, int y, unsigned long color);
-    void clear_tile(int x, int y);
-    void draw_snake_head_tile(int x, int y);
-    void draw_snake_body_tile(int x, int y);
-
-    void draw_snake();
-    void draw_food();
-    void draw_border();
-    void draw_frame();
-  };
+  class x11_gui;
 }
+
+class snake::x11_gui final {
+public:
+  x11_gui();
+  ~x11_gui();
+
+  void run();
+
+private:
+  Display* const display_ = nullptr;
+  Screen* const screen_ = nullptr;
+  Window win_{};
+  GC gc_{};
+  game_model model_;
+  Atom wm_delete_;
+  int tile_size_ = 0;
+  int x_offset_ = 0;
+  int y_offset_ = 0;
+  bool is_running_ = false;
+
+  void update_tile_size_and_offset();
+  void close_connection() noexcept;
+  void perform_step();
+
+  void handle_event(XEvent&);
+  void handle_expose(const XEvent&);
+  void handle_keypress(XEvent&);
+
+  void draw_tile(int x, int y, unsigned long color);
+  void clear_tile(int x, int y);
+  void draw_snake_head_tile(int x, int y);
+  void draw_snake_body_tile(int x, int y);
+
+  void draw_snake();
+  void draw_food();
+  void draw_border();
+  void draw_frame();
+};
+
+struct game_theme {
+  const char* name;
+  unsigned long border_color;
+  unsigned long guidance_color;
+  unsigned long snake_head_color;
+  unsigned long snake_body_color;
+  unsigned long background_color;
+  unsigned long food_color;
+  unsigned long grid_color;
+  bool show_grid;
+  bool show_guidance;
+};
+
+/* clang-format off */
+const game_theme themes[] = {
+    {"Synthwave Night", 0xCCCCCC, 0x220022, 0x00FFFF, 0x7000FF, 0x050510, 0xFFE000, 0x151525, true, true },
+    {"Forest Hacker",   0x83A598, 0x1D2021, 0xB8BB26, 0x98971A, 0x282828, 0xFB4934, 0x3C3836, true, true },
+    {"Deep Sea",        0xEEEEEE, 0x001A1A, 0x00FFCC, 0x0088AA, 0x00050A, 0xFF7700, 0x0A1F26, true, true },
+    {"Blood Moon",      0xFFFFFF, 0x1A0505, 0xFF0000, 0x800000, 0x0A0000, 0xFFFFFF, 0x221111, true, true },
+    {"Acid Classic",    0xFFFFFF, 0x333300, 0x00FF00, 0x00CC00, 0x000000, 0xFF0000, 0x111111, true, false},
+};
+/* clang-format on */
+
+int current_theme_idx = 0;
 
 namespace {
   Display* open_display();
@@ -67,6 +94,7 @@ snake::x11_gui::x11_gui() :
   XSetWMProtocols(display_, win_, &wm_delete_, 1);
   XMapWindow(display_, win_);
   XStoreName(display_, win_, "Snake Game");
+  XSetWindowBackground(display_, win_, themes[current_theme_idx].background_color);
   update_tile_size_and_offset();
   std::println(stderr, "Vendor  {}", XServerVendor(display_));
   std::println(stderr, "Release {}", XVendorRelease(display_));
@@ -91,6 +119,7 @@ void snake::x11_gui::run() {
   if (event.type != Expose) {
     std::println(stderr, "Unexpected first event");
   }
+  update_tile_size_and_offset();
   draw_frame();
   XFlush(display_);
   while (is_running_) {
@@ -112,9 +141,11 @@ void snake::x11_gui::perform_step() {
   const auto old_head = model_.get_snake().front();
   model_.step();
   if (model_.is_game_over()) {
-    is_running_ = false;
+    //    is_running_ = false;
     return;
   }
+  draw_frame();
+  return;
   const auto new_head = model_.get_snake().front();
   if (new_head == old_food) {
     draw_food();
@@ -173,6 +204,9 @@ void snake::x11_gui::handle_keypress(XEvent& event) {
   case XK_Right:
     model_.set_direction(direction::right);
     break;
+  case 't':
+    current_theme_idx = (current_theme_idx + 1) % (sizeof(themes) / sizeof(themes[0]));
+    break;
   }
 }
 
@@ -190,22 +224,24 @@ void snake::x11_gui::draw_tile(int x, int y, unsigned long color) {
   const auto y_coord = y * tile_size_ + y_offset_;
   XSetForeground(display_, gc_, color);
   XFillRectangle(display_, win_, gc_, x_coord, y_coord, tile_size_, tile_size_);
+  XSetForeground(display_, gc_, themes[current_theme_idx].grid_color);
+  XDrawRectangle(display_, win_, gc_, x_coord, y_coord, tile_size_, tile_size_);
 }
 
 void snake::x11_gui::clear_tile(int x, int y) {
   const auto x_coord = x * tile_size_ + x_offset_;
   const auto y_coord = y * tile_size_ + y_offset_;
   XClearArea(display_, win_, x_coord, y_coord, tile_size_, tile_size_, false);
+  XSetForeground(display_, gc_, themes[current_theme_idx].grid_color);
+  XDrawRectangle(display_, win_, gc_, x_coord, y_coord, tile_size_, tile_size_);
 }
 
 void snake::x11_gui::draw_snake_head_tile(int x, int y) {
-  const auto color = 0xFFFF00;
-  draw_tile(x, y, color);
+  draw_tile(x, y, themes[current_theme_idx].snake_head_color);
 }
 
 void snake::x11_gui::draw_snake_body_tile(int x, int y) {
-  const auto color = 0x00FF00;
-  draw_tile(x, y, color);
+  draw_tile(x, y, themes[current_theme_idx].snake_body_color);
 }
 
 void snake::x11_gui::draw_snake() {
@@ -218,22 +254,34 @@ void snake::x11_gui::draw_snake() {
 }
 
 void snake::x11_gui::draw_food() {
-  const static auto color = 0xFF0000;
   const auto food = model_.get_food();
-  draw_tile(food.x, food.y, color);
+  for (auto x = 0; x != model_.cols(); ++x) {
+    draw_tile(x, food.y, themes[current_theme_idx].guidance_color);
+  }
+  for (auto y = 0; y != model_.rows(); ++y) {
+    draw_tile(food.x, y, themes[current_theme_idx].guidance_color);
+  }
+  draw_tile(food.x, food.y, themes[current_theme_idx].food_color);
 }
 
 void snake::x11_gui::draw_border() {
-  const static auto white = XWhitePixelOfScreen(screen_);
-  XSetForeground(display_, gc_, white);
+  XSetForeground(display_, gc_, themes[current_theme_idx].grid_color);
+  for (auto x = 0; x != model_.cols(); ++x) {
+    for (auto y = 0; y != model_.rows(); ++y) {
+      const auto x_coord = x * tile_size_ + x_offset_;
+      const auto y_coord = y * tile_size_ + y_offset_;
+      XDrawRectangle(display_, win_, gc_, x_coord, y_coord, tile_size_, tile_size_);
+    }
+  }
+  XSetForeground(display_, gc_, themes[current_theme_idx].border_color);
   XDrawRectangle(display_, win_, gc_, x_offset_ - 1, y_offset_ - 1,
       model_.cols() * tile_size_ + 1, model_.rows() * tile_size_ + 1);
 }
 
 void snake::x11_gui::draw_frame() {
   XClearWindow(display_, win_);
-  draw_snake();
   draw_food();
+  draw_snake();
   draw_border();
 }
 
