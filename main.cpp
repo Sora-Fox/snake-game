@@ -11,48 +11,12 @@
 #include "game_model.hpp"
 
 namespace snake {
-  class x11_gui;
+  struct game_theme;
+  class game_view;
+  class x11_view;
 }
 
-class snake::x11_gui final {
-public:
-  x11_gui();
-  ~x11_gui();
-
-  void run();
-
-private:
-  Display* const display_ = nullptr;
-  Screen* const screen_ = nullptr;
-  Window win_{};
-  GC gc_{};
-  game_model model_;
-  Atom wm_delete_;
-  int tile_size_ = 0;
-  int x_offset_ = 0;
-  int y_offset_ = 0;
-  bool is_running_ = false;
-
-  void update_tile_size_and_offset();
-  void close_connection() noexcept;
-  void perform_step();
-
-  void handle_event(XEvent&);
-  void handle_expose(const XEvent&);
-  void handle_keypress(XEvent&);
-
-  void draw_tile(int x, int y, unsigned long color);
-  void clear_tile(int x, int y);
-  void draw_snake_head_tile(int x, int y);
-  void draw_snake_body_tile(int x, int y);
-
-  void draw_snake();
-  void draw_food();
-  void draw_border();
-  void draw_frame();
-};
-
-struct game_theme {
+struct snake::game_theme {
   const char* name;
   unsigned long border_color;
   unsigned long guidance_color;
@@ -65,26 +29,9 @@ struct game_theme {
   bool show_guidance;
 };
 
-/* clang-format off */
-const game_theme themes[] = {
-    {"Synthwave Night", 0xCCCCCC, 0x220022, 0x00FFFF, 0x7000FF, 0x050510, 0xFFE000, 0x151525, true, true },
-    {"Forest Hacker",   0x83A598, 0x1D2021, 0xB8BB26, 0x98971A, 0x282828, 0xFB4934, 0x3C3836, true, true },
-    {"Deep Sea",        0xEEEEEE, 0x001A1A, 0x00FFCC, 0x0088AA, 0x00050A, 0xFF7700, 0x0A1F26, true, true },
-    {"Blood Moon",      0xFFFFFF, 0x1A0505, 0xFF0000, 0x800000, 0x0A0000, 0xFFFFFF, 0x221111, true, true },
-    {"Acid Classic",    0xFFFFFF, 0x333300, 0x00FF00, 0x00CC00, 0x000000, 0xFF0000, 0x111111, true, false},
-};
-/* clang-format on */
-
-int current_theme_idx = 0;
-
-namespace snake {
-  class game_view;
-  class x11_view;
-}
-
 class snake::game_view {
 public:
-  enum class command : std::uint8_t { none, up, down, left, right, exit };
+  enum class command : std::uint8_t { none, up, down, left, right, exit, switch_theme };
 
   virtual ~game_view() = 0;
 
@@ -94,7 +41,7 @@ public:
   virtual void close() noexcept = 0;
   [[nodiscard]] virtual bool should_close() const noexcept = 0;
 
-  virtual void render(const game_model&) = 0;
+  virtual void render(const game_model&, const game_theme&) = 0;
   [[nodiscard]] virtual command poll_input() = 0;
 };
 
@@ -111,7 +58,7 @@ public:
   void close() noexcept override;
   bool should_close() const noexcept override;
 
-  void render(const game_model&) override;
+  void render(const game_model&, const game_theme&) override;
   command poll_input() override;
 
 private:
@@ -179,7 +126,7 @@ void snake::x11_view::close() noexcept {
   should_close_ = false;
 }
 
-void snake::x11_view::render(const game_model& model) {
+void snake::x11_view::render(const game_model& model, const game_theme& theme) {
   // draw_background
   // draw_guidance
   // draw_food
@@ -194,37 +141,37 @@ void snake::x11_view::render(const game_model& model) {
   auto x_offset = (attrs.width - 1 - tile_size * w) / 2;
   auto y_offset = (attrs.height - 1 - tile_size * h) / 2;
 
-  auto draw_tile = [x_offset, y_offset, tile_size, this](int x, int y,
+  auto draw_tile = [x_offset, y_offset, tile_size, theme, this](int x, int y,
                        unsigned long color) {
     const auto x_coord = x * tile_size + x_offset;
     const auto y_coord = y * tile_size + y_offset;
     XSetForeground(display_, gc_, color);
     XFillRectangle(display_, win_, gc_, x_coord, y_coord, tile_size, tile_size);
-    XSetForeground(display_, gc_, themes[current_theme_idx].grid_color);
+    XSetForeground(display_, gc_, theme.grid_color);
     XDrawRectangle(display_, win_, gc_, x_coord, y_coord, tile_size, tile_size);
   };
 
-  XSetBackground(display_, gc_, themes[current_theme_idx].background_color);
+  XSetBackground(display_, gc_, theme.background_color);
   XClearWindow(display_, win_);
 
   const auto food = model.get_food();
   for (auto x = 0; x != model.cols(); ++x) {
-    draw_tile(x, food.y, themes[current_theme_idx].guidance_color);
+    draw_tile(x, food.y, theme.guidance_color);
   }
   for (auto y = 0; y != model.rows(); ++y) {
-    draw_tile(food.x, y, themes[current_theme_idx].guidance_color);
+    draw_tile(food.x, y, theme.guidance_color);
   }
 
-  draw_tile(food.x, food.y, themes[current_theme_idx].food_color);
+  draw_tile(food.x, food.y, theme.food_color);
 
   const auto& snake = model.get_snake();
   const auto head = snake.front();
-  draw_tile(head.x, head.y, themes[current_theme_idx].snake_head_color);
+  draw_tile(head.x, head.y, theme.snake_head_color);
   for (auto i = snake.begin() + 1; i != snake.end(); ++i) {
-    draw_tile(i->x, i->y, themes[current_theme_idx].snake_body_color);
+    draw_tile(i->x, i->y, theme.snake_body_color);
   }
 
-  XSetForeground(display_, gc_, themes[current_theme_idx].grid_color);
+  XSetForeground(display_, gc_, theme.grid_color);
   for (auto x = 0; x != model.cols(); ++x) {
     for (auto y = 0; y != model.rows(); ++y) {
       const auto x_coord = x * tile_size + x_offset;
@@ -233,7 +180,7 @@ void snake::x11_view::render(const game_model& model) {
     }
   }
 
-  XSetForeground(display_, gc_, themes[current_theme_idx].border_color);
+  XSetForeground(display_, gc_, theme.border_color);
   XDrawRectangle(display_, win_, gc_, x_offset - 1, y_offset - 1,
       model.cols() * tile_size + 1, model.rows() * tile_size + 1);
   XFlush(display_);
@@ -280,13 +227,25 @@ snake::x11_view::command snake::x11_view::poll_input() {
         last_direction_change = command::right;
         break;
       case 't':
-        current_theme_idx =
-            (current_theme_idx + 1) % (sizeof(themes) / sizeof(themes[0]));
+        return command::switch_theme;
         break;
       }
     }
   }
   return last_direction_change;
+}
+namespace snake {
+  /* clang-format off */
+const game_theme themes[] = {
+    {"Synthwave Night", 0xCCCCCC, 0x220022, 0x00FFFF, 0x7000FF, 0x050510, 0xFFE000, 0x151525, true, true },
+    {"Forest Hacker",   0x83A598, 0x1D2021, 0xB8BB26, 0x98971A, 0x282828, 0xFB4934, 0x3C3836, true, true },
+    {"Deep Sea",        0xEEEEEE, 0x001A1A, 0x00FFCC, 0x0088AA, 0x00050A, 0xFF7700, 0x0A1F26, true, true },
+    {"Blood Moon",      0xFFFFFF, 0x1A0505, 0xFF0000, 0x800000, 0x0A0000, 0xFFFFFF, 0x221111, true, true },
+    {"Acid Classic",    0xFFFFFF, 0x333300, 0x00FF00, 0x00CC00, 0x000000, 0xFF0000, 0x111111, true, false},
+};
+  /* clang-format on */
+
+  int current_theme_idx = 0;
 }
 
 #include <chrono>
@@ -305,7 +264,7 @@ int main() try {
     std::println(stderr, "Failed to open GUI");
     return 1;
   }
-  view->render(model);
+  view->render(model, snake::themes[snake::current_theme_idx]);
   // 3. Game Loop
   while (view->is_open() && !view->should_close()) {
     // --- Input Phase ---
@@ -329,6 +288,9 @@ int main() try {
     case snake::game_view::command::exit:
       view->close();
       break;
+    case snake::game_view::command::switch_theme:
+      snake::current_theme_idx = (snake::current_theme_idx + 1) %
+                                 (sizeof(snake::themes) / sizeof(snake::themes[0]));
     default:
       break;
     }
@@ -346,7 +308,7 @@ int main() try {
     }
 
     // --- Render Phase ---
-    view->render(model);
+    view->render(model, snake::themes[snake::current_theme_idx]);
 
     // --- Timing ---
     // 150ms delay as in your previous implementation
