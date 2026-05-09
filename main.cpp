@@ -155,10 +155,10 @@ void snake::x11_view::render(const game_model& model, const game_theme& theme) {
   XClearWindow(display_, win_);
 
   const auto food = model.get_food();
-  for (auto x = 0; x != model.cols(); ++x) {
+  for (size_t x = 0; x != model.cols(); ++x) {
     draw_tile(x, food.y, theme.guidance_color);
   }
-  for (auto y = 0; y != model.rows(); ++y) {
+  for (size_t y = 0; y != model.rows(); ++y) {
     draw_tile(food.x, y, theme.guidance_color);
   }
 
@@ -172,8 +172,8 @@ void snake::x11_view::render(const game_model& model, const game_theme& theme) {
   }
 
   XSetForeground(display_, gc_, theme.grid_color);
-  for (auto x = 0; x != model.cols(); ++x) {
-    for (auto y = 0; y != model.rows(); ++y) {
+  for (size_t x = 0; x != model.cols(); ++x) {
+    for (size_t y = 0; y != model.rows(); ++y) {
       const auto x_coord = x * tile_size + x_offset;
       const auto y_coord = y * tile_size + y_offset;
       XDrawRectangle(display_, win_, gc_, x_coord, y_coord, tile_size, tile_size);
@@ -253,24 +253,21 @@ const game_theme themes[] = {
 #include <thread>
 
 int main() try {
-
-  // 1. Initialize the Model (assuming constructor snake::game_model(rows, cols))
   snake::game_model model(24, 24);
-
-  // 2. Initialize the View
   std::unique_ptr<snake::game_view> view = std::make_unique<snake::x11_view>();
-
   if (!view->open()) {
     std::println(stderr, "Failed to open GUI");
     return 1;
   }
   view->render(model, snake::themes[snake::current_theme_idx]);
-  // 3. Game Loop
-  while (view->is_open() && !view->should_close()) {
-    // --- Input Phase ---
-    // We poll until the queue is empty to get the most recent command
+  // poll
+  // step
+  // render
+  while (true) {
     auto cmd = view->poll_input();
-
+    if (cmd == snake::game_view::command::exit || view->should_close()) {
+      break;
+    }
     using snake::direction;
     switch (cmd) {
     case snake::game_view::command::up:
@@ -285,35 +282,24 @@ int main() try {
     case snake::game_view::command::right:
       model.set_direction(direction::right);
       break;
-    case snake::game_view::command::exit:
-      view->close();
-      break;
     case snake::game_view::command::switch_theme:
       snake::current_theme_idx = (snake::current_theme_idx + 1) %
                                  (sizeof(snake::themes) / sizeof(snake::themes[0]));
+      break;
     default:
       break;
     }
-
-    if (!view->is_open())
-      break;
-
-    // --- Update Phase ---
-    model.step();
-
     if (model.is_game_over()) {
-      std::println(stderr, "Game Over!");
-      // You could reset the model here or break
-      break;
+      view->render(model, snake::themes[snake::current_theme_idx]);
+      continue;
     }
-
-    // --- Render Phase ---
+    model.step();
     view->render(model, snake::themes[snake::current_theme_idx]);
-
-    // --- Timing ---
-    // 150ms delay as in your previous implementation
     std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    //  std::println(stderr, "Game Over!");
+    //  break;
   }
+  view->close();
 
   return 0;
 } catch (const std::exception& e) {
