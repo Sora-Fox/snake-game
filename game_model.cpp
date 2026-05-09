@@ -2,20 +2,21 @@
 #include <algorithm>
 #include <random>
 #include <ranges>
+#include <vector>
 
 namespace snake {
   [[nodiscard]] point_t apply_direction(point_t, direction);
 }
 
-snake::game_model::game_model(const int rows, const int columns) :
+snake::game_model::game_model(const int height, const int width) :
   snake_(),
   scores_(0),
-  max_x_(columns - 1),
-  max_y_(rows - 1),
+  max_x_(width - 1),
+  max_y_(height - 1),
   prev_dir_(direction::right),
   dir_(direction::right),
   is_game_over_(false) {
-  generate_initial_snake();
+  snake_ = generate_initial_snake();
   food_ = generate_food();
 }
 
@@ -50,6 +51,14 @@ void snake::game_model::step() {
   prev_dir_ = dir_;
 }
 
+void snake::game_model::restart() {
+  scores_ = 0;
+  is_game_over_ = false;
+  dir_ = prev_dir_ = direction::right;
+  snake_ = generate_initial_snake();
+  food_ = generate_food();
+}
+
 std::size_t snake::game_model::rows() const noexcept {
   return max_y_ + 1;
 }
@@ -74,13 +83,15 @@ bool snake::game_model::is_game_over() const noexcept {
   return is_game_over_;
 }
 
-void snake::game_model::generate_initial_snake() {
+std::vector<snake::point_t> snake::game_model::generate_initial_snake() const {
   const auto [mid_x, mid_y] = point_t{ max_x_ / 2, max_y_ / 2 };
-  snake_.emplace_back(mid_x + 2, mid_y);
-  snake_.emplace_back(mid_x + 1, mid_y);
-  snake_.emplace_back(mid_x + 0, mid_y);
-  snake_.emplace_back(mid_x - 1, mid_y);
-  snake_.emplace_back(mid_x - 2, mid_y);
+  return std::vector<point_t>{
+    { mid_x + 2, mid_y },
+    { mid_x + 1, mid_y },
+    { mid_x + 0, mid_y },
+    { mid_x - 1, mid_y },
+    { mid_x - 2, mid_y },
+  };
 }
 
 snake::point_t snake::game_model::generate_food() const {

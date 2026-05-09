@@ -22,10 +22,11 @@ enum class snake::direction : std::uint8_t {
 
 class snake::game_model {
 public:
-  explicit game_model(int rows, int columns);
+  explicit game_model(int height, int width);
 
   void set_direction(direction) noexcept;
   void step();
+  void restart();
 
   [[nodiscard]] std::size_t rows() const noexcept;
   [[nodiscard]] std::size_t cols() const noexcept;
@@ -39,13 +40,13 @@ private:
   std::vector<point_t> snake_;
   std::size_t scores_;
   point_t food_;
-  int max_x_;
-  int max_y_;
+  const int max_x_;
+  const int max_y_;
   direction prev_dir_;
   direction dir_;
   bool is_game_over_;
 
-  void generate_initial_snake();
+  [[nodiscard]] std::vector<point_t> generate_initial_snake() const;
   [[nodiscard]] point_t generate_food() const;
   [[nodiscard]] bool is_snake(point_t) const noexcept;
   [[nodiscard]] bool is_field(point_t) const noexcept;
