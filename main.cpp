@@ -1,4 +1,6 @@
+#include <cassert>
 #include <chrono>
+#include <cstddef>
 #include <cstdio>
 #include <print>
 #include <stdexcept>
@@ -31,7 +33,16 @@ struct snake::game_theme {
 
 class snake::game_view {
 public:
-  enum class command : std::uint8_t { none, up, down, left, right, exit, switch_theme };
+  enum class command : std::uint8_t {
+    none,
+    up,
+    down,
+    left,
+    right,
+    exit,
+    switch_theme,
+    restart
+  };
 
   virtual ~game_view() = 0;
 
@@ -69,44 +80,27 @@ private:
   Atom wm_delete_{};
   bool should_close_ = false;
   bool is_open_ = false;
+
+  bool open_display() noexcept;
+  bool open_screen() noexcept;
+  bool open_window() noexcept;
+  void prepare_window() noexcept;
 };
 
 bool snake::x11_view::open() noexcept {
-  display_ = XOpenDisplay(nullptr);
-  if (!display_) {
-    std::println(stderr, "Failed to open display");
+  if (is_open()) {
+    return true;
+  }
+  if (!open_display() || !open_screen() || !open_window()) {
     return false;
   }
-
-  const auto screen_number = XDefaultScreen(display_);
-  screen_ = XScreenOfDisplay(display_, screen_number);
-  if (!screen_) {
-    std::println(stderr, "Failed to get screen");
-    XCloseDisplay(display_);
-    return false;
-  }
-  const auto black = XBlackPixelOfScreen(screen_);
-  const auto root = XRootWindowOfScreen(screen_);
-  constexpr static auto h = 832;
-  constexpr static auto w = 832;
-  win_ = XCreateSimpleWindow(display_, root, 0, 0, w, h, 0, black, black);
-  gc_ = XCreateGC(display_, win_, 0, nullptr);
-  wm_delete_ = XInternAtom(display_, "WM_DELETE_WINDOW", false);
-  XSelectInput(display_, win_, ExposureMask | KeyPressMask);
-  XSetWMProtocols(display_, win_, &wm_delete_, 1);
-  XMapWindow(display_, win_);
-  XStoreName(display_, win_, "Snake Game");
+  prepare_window();
+  std::println(stderr, "X server connection opened");
   std::println(stderr, "Vendor  {}", XServerVendor(display_));
   std::println(stderr, "Release {}", XVendorRelease(display_));
   std::println(stderr, "Display {}", XDisplayString(display_));
   is_open_ = true;
-  XEvent e;
-  while (true) {
-    XNextEvent(display_, &e);
-    if (e.type == Expose) {
-      break;
-    }
-  }
+  should_close_ = false;
   return true;
 };
 
@@ -210,6 +204,10 @@ snake::x11_view::command snake::x11_view::poll_input() {
       switch (keysym) {
       case 'q':
         return command::exit;
+      case 'r':
+        return command::restart;
+      case 't':
+        return command::switch_theme;
       case 'k':
       case XK_Up:
         last_direction_change = command::up;
@@ -226,82 +224,124 @@ snake::x11_view::command snake::x11_view::poll_input() {
       case XK_Right:
         last_direction_change = command::right;
         break;
-      case 't':
-        return command::switch_theme;
-        break;
       }
     }
   }
   return last_direction_change;
 }
-namespace snake {
-  /* clang-format off */
-const game_theme themes[] = {
-    {"Synthwave Night", 0xCCCCCC, 0x220022, 0x00FFFF, 0x7000FF, 0x050510, 0xFFE000, 0x151525, true, true },
-    {"Forest Hacker",   0x83A598, 0x1D2021, 0xB8BB26, 0x98971A, 0x282828, 0xFB4934, 0x3C3836, true, true },
-    {"Deep Sea",        0xEEEEEE, 0x001A1A, 0x00FFCC, 0x0088AA, 0x00050A, 0xFF7700, 0x0A1F26, true, true },
-    {"Blood Moon",      0xFFFFFF, 0x1A0505, 0xFF0000, 0x800000, 0x0A0000, 0xFFFFFF, 0x221111, true, true },
-    {"Acid Classic",    0xFFFFFF, 0x333300, 0x00FF00, 0x00CC00, 0x000000, 0xFF0000, 0x111111, true, false},
-};
-  /* clang-format on */
 
-  int current_theme_idx = 0;
+bool snake::x11_view::open_display() noexcept {
+  display_ = XOpenDisplay(nullptr);
+  if (!display_) {
+    std::println(stderr, "Failed to open display");
+    return false;
+  }
+  return true;
+}
+
+bool snake::x11_view::open_screen() noexcept {
+  assert(display_ && "Display must be opened before screen");
+  const auto screen_number = XDefaultScreen(display_);
+  screen_ = XScreenOfDisplay(display_, screen_number);
+  if (!screen_) {
+    std::println(stderr, "Failed to open screen");
+    XCloseDisplay(display_);
+    return false;
+  }
+  return true;
+}
+
+bool snake::x11_view::open_window() noexcept {
+  const auto black = XBlackPixelOfScreen(screen_);
+  const auto root = XRootWindowOfScreen(screen_);
+  constexpr static auto h = 832;
+  constexpr static auto w = 832;
+  win_ = XCreateSimpleWindow(display_, root, 0, 0, w, h, 0, black, black);
+  gc_ = XCreateGC(display_, win_, 0, nullptr);
+  wm_delete_ = XInternAtom(display_, "WM_DELETE_WINDOW", false);
+  XSelectInput(display_, win_, ExposureMask | KeyPressMask);
+  XSetWMProtocols(display_, win_, &wm_delete_, 1);
+  XMapWindow(display_, win_);
+  XStoreName(display_, win_, "Snake Game");
+  return true;
+}
+
+void snake::x11_view::prepare_window() noexcept {
+  XEvent event{};
+  do {
+    XNextEvent(display_, &event);
+  } while (event.type != Expose);
 }
 
 #include <chrono>
 #include <memory>
 #include <thread>
 
-int main() try {
-  snake::game_model model(24, 24);
-  std::unique_ptr<snake::game_view> view = std::make_unique<snake::x11_view>();
-  if (!view->open()) {
-    std::println(stderr, "Failed to open GUI");
-    return 1;
-  }
-  view->render(model, snake::themes[snake::current_theme_idx]);
-  // poll
-  // step
-  // render
-  while (true) {
-    auto cmd = view->poll_input();
-    if (cmd == snake::game_view::command::exit || view->should_close()) {
-      break;
-    }
-    using snake::direction;
+namespace snake {
+  void apply_command(game_model& model, game_view::command cmd) {
     switch (cmd) {
-    case snake::game_view::command::up:
+    case game_view::command::restart:
+      model.restart();
+      break;
+    case game_view::command::up:
       model.set_direction(direction::up);
       break;
-    case snake::game_view::command::down:
+    case game_view::command::down:
       model.set_direction(direction::down);
       break;
-    case snake::game_view::command::left:
+    case game_view::command::left:
       model.set_direction(direction::left);
       break;
-    case snake::game_view::command::right:
+    case game_view::command::right:
       model.set_direction(direction::right);
-      break;
-    case snake::game_view::command::switch_theme:
-      snake::current_theme_idx = (snake::current_theme_idx + 1) %
-                                 (sizeof(snake::themes) / sizeof(snake::themes[0]));
       break;
     default:
       break;
     }
-    if (model.is_game_over()) {
-      view->render(model, snake::themes[snake::current_theme_idx]);
-      continue;
+  }
+}
+
+int main() try {
+  using namespace snake;
+  /* clang-format off */
+  const std::vector<game_theme> themes = {
+    {"Synthwave Night", 0xCCCCCC, 0x220022, 0x00FFFF, 0x7000FF, 0x050510, 0xFFE000, 0x151525, true, true },
+    {"Forest Hacker",   0x83A598, 0x1D2021, 0xB8BB26, 0x98971A, 0x282828, 0xFB4934, 0x3C3836, true, true },
+    {"Deep Sea",        0xEEEEEE, 0x001A1A, 0x00FFCC, 0x0088AA, 0x00050A, 0xFF7700, 0x0A1F26, true, true },
+    {"Blood Moon",      0xFFFFFF, 0x1A0505, 0xFF0000, 0x800000, 0x0A0000, 0xFFFFFF, 0x221111, true, true },
+    {"Acid Classic",    0xFFFFFF, 0x333300, 0x00FF00, 0x00CC00, 0x000000, 0xFF0000, 0x111111, true, false},
+  };
+  /* clang-format on */
+  std::size_t theme_idx = 0;
+  game_model model(24, 24);
+  std::unique_ptr<game_view> view = std::make_unique<x11_view>();
+  if (!view->open()) {
+    std::println(stderr, "Failed to open GUI");
+    return 1;
+  }
+  view->render(model, themes[theme_idx]);
+  using command = game_view::command;
+  constexpr auto frame_time = std::chrono::milliseconds(150);
+  while (true) {
+    auto time_begin = std::chrono::steady_clock::now();
+    const auto cmd = view->poll_input();
+    if (cmd == command::exit || view->should_close()) {
+      break;
     }
-    model.step();
-    view->render(model, snake::themes[snake::current_theme_idx]);
-    std::this_thread::sleep_for(std::chrono::milliseconds(150));
-    //  std::println(stderr, "Game Over!");
-    //  break;
+    if (cmd == command::switch_theme) {
+      theme_idx = (theme_idx + 1) % themes.size();
+    }
+    apply_command(model, cmd);
+    if (!model.is_game_over()) {
+      model.step();
+    }
+    view->render(model, themes[theme_idx]);
+    const auto elapsed = std::chrono::steady_clock::now() - time_begin;
+    if (elapsed < frame_time) {
+      std::this_thread::sleep_for(frame_time - elapsed);
+    }
   }
   view->close();
-
-  return 0;
 } catch (const std::exception& e) {
   std::println(stderr, "Error: {}", e.what());
   return 1;
