@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <print>
 #include <stdexcept>
+#include <algorithm>
 #include <thread>
 
 #include <X11/X.h>
@@ -177,6 +178,49 @@ void snake::x11_view::render(const game_model& model, const game_theme& theme) {
   XSetForeground(display_, gc_, theme.border_color);
   XDrawRectangle(display_, win_, gc_, x_offset - 1, y_offset - 1,
       model.cols() * tile_size + 1, model.rows() * tile_size + 1);
+
+  if (model.is_game_over()) {
+    static const uint16_t glyphs[256][5] = {
+    ['G'] = {0b111, 0b100, 0b101, 0b101, 0b111},
+    ['A'] = {0b111, 0b101, 0b111, 0b101, 0b101},
+    ['M'] = {0b101, 0b111, 0b111, 0b101, 0b101},
+    ['E'] = {0b111, 0b100, 0b111, 0b100, 0b111},
+    ['O'] = {0b111, 0b101, 0b101, 0b101, 0b111},
+    ['V'] = {0b101, 0b101, 0b101, 0b101, 0b010},
+    ['R'] = {0b111, 0b101, 0b110, 0b101, 0b101},
+    [' '] = {0b000, 0b000, 0b000, 0b000, 0b000}
+};
+     // XSetForeground(display_, gc_, 0x000000);
+   //   XFillRectangle(display_, win_, gc_, attrs.width / 2 - 100, attrs.height / 2 - 30, 200, 60);
+      int p_size = std::max(static_cast<unsigned long>(2), tile_size / 4);
+      std::string text = "GAME OVER";
+int x_center = attrs.width / 2;
+int y_center = attrs.height /2;
+      int char_w = 3 * p_size;
+    int char_h = 5 * p_size;
+    int spacing = 1 * p_size;
+    int total_w = static_cast<int>(text.size()) * (char_w + spacing) - spacing;
+
+    int cur_x = x_center - total_w / 2;
+    int cur_y = y_center - char_h / 2;
+
+    XSetForeground(display_, gc_, 0xFFFFFF);
+
+    for (char c : text) {
+        const uint16_t* glyph = glyphs[static_cast<unsigned char>(c)];
+        for (int row = 0; row < 5; ++row) {
+            for (int col = 0; col < 3; ++col) {
+                if (glyph[row] & (1 << (2 - col))) {
+                    XFillRectangle(display_, win_, gc_,
+                                   cur_x + col * p_size,
+                                   cur_y + row * p_size,
+                                   p_size, p_size);
+                }
+            }
+        }
+        cur_x += char_w + spacing;
+    }
+  }
   XFlush(display_);
 }
 
