@@ -1,10 +1,10 @@
+#include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <cstddef>
 #include <cstdio>
 #include <print>
 #include <stdexcept>
-#include <algorithm>
 #include <thread>
 
 #include <X11/X.h>
@@ -142,19 +142,23 @@ void snake::x11_view::render(const game_model& model, const game_theme& theme) {
     const auto y_coord = y * tile_size + y_offset;
     XSetForeground(display_, gc_, color);
     XFillRectangle(display_, win_, gc_, x_coord, y_coord, tile_size, tile_size);
-    XSetForeground(display_, gc_, theme.grid_color);
-    XDrawRectangle(display_, win_, gc_, x_coord, y_coord, tile_size, tile_size);
+    if (theme.show_grid) {
+      XSetForeground(display_, gc_, theme.grid_color);
+      XDrawRectangle(display_, win_, gc_, x_coord, y_coord, tile_size, tile_size);
+    }
   };
 
   XSetBackground(display_, gc_, theme.background_color);
   XClearWindow(display_, win_);
 
   const auto food = model.get_food();
-  for (size_t x = 0; x != model.cols(); ++x) {
-    draw_tile(x, food.y, theme.guidance_color);
-  }
-  for (size_t y = 0; y != model.rows(); ++y) {
-    draw_tile(food.x, y, theme.guidance_color);
+  if (theme.show_guidance) {
+    for (size_t x = 0; x != model.cols(); ++x) {
+      draw_tile(x, food.y, theme.guidance_color);
+    }
+    for (size_t y = 0; y != model.rows(); ++y) {
+      draw_tile(food.x, y, theme.guidance_color);
+    }
   }
 
   draw_tile(food.x, food.y, theme.food_color);
@@ -166,12 +170,14 @@ void snake::x11_view::render(const game_model& model, const game_theme& theme) {
     draw_tile(i->x, i->y, theme.snake_body_color);
   }
 
-  XSetForeground(display_, gc_, theme.grid_color);
-  for (size_t x = 0; x != model.cols(); ++x) {
-    for (size_t y = 0; y != model.rows(); ++y) {
-      const auto x_coord = x * tile_size + x_offset;
-      const auto y_coord = y * tile_size + y_offset;
-      XDrawRectangle(display_, win_, gc_, x_coord, y_coord, tile_size, tile_size);
+  if (theme.show_grid) {
+    XSetForeground(display_, gc_, theme.grid_color);
+    for (size_t x = 0; x != model.cols(); ++x) {
+      for (size_t y = 0; y != model.rows(); ++y) {
+        const auto x_coord = x * tile_size + x_offset;
+        const auto y_coord = y * tile_size + y_offset;
+        XDrawRectangle(display_, win_, gc_, x_coord, y_coord, tile_size, tile_size);
+      }
     }
   }
 
@@ -180,23 +186,23 @@ void snake::x11_view::render(const game_model& model, const game_theme& theme) {
       model.cols() * tile_size + 1, model.rows() * tile_size + 1);
 
   if (model.is_game_over()) {
-    static const uint16_t glyphs[256][5] = {
-    ['G'] = {0b111, 0b100, 0b101, 0b101, 0b111},
-    ['A'] = {0b111, 0b101, 0b111, 0b101, 0b101},
-    ['M'] = {0b101, 0b111, 0b111, 0b101, 0b101},
-    ['E'] = {0b111, 0b100, 0b111, 0b100, 0b111},
-    ['O'] = {0b111, 0b101, 0b101, 0b101, 0b111},
-    ['V'] = {0b101, 0b101, 0b101, 0b101, 0b010},
-    ['R'] = {0b111, 0b101, 0b110, 0b101, 0b101},
-    [' '] = {0b000, 0b000, 0b000, 0b000, 0b000}
-};
-     // XSetForeground(display_, gc_, 0x000000);
-   //   XFillRectangle(display_, win_, gc_, attrs.width / 2 - 100, attrs.height / 2 - 30, 200, 60);
-      int p_size = std::max(static_cast<unsigned long>(2), tile_size / 4);
-      std::string text = "GAME OVER";
-int x_center = attrs.width / 2;
-int y_center = attrs.height /2;
-      int char_w = 3 * p_size;
+    static const uint16_t glyphs[256][5] = { ['G'] = { 0b111, 0b100, 0b101, 0b101,
+                                                 0b111 },
+      ['A'] = { 0b111, 0b101, 0b111, 0b101, 0b101 },
+      ['M'] = { 0b101, 0b111, 0b111, 0b101, 0b101 },
+      ['E'] = { 0b111, 0b100, 0b111, 0b100, 0b111 },
+      ['O'] = { 0b111, 0b101, 0b101, 0b101, 0b111 },
+      ['V'] = { 0b101, 0b101, 0b101, 0b101, 0b010 },
+      ['R'] = { 0b111, 0b101, 0b110, 0b101, 0b101 },
+      [' '] = { 0b000, 0b000, 0b000, 0b000, 0b000 } };
+    // XSetForeground(display_, gc_, 0x000000);
+    //   XFillRectangle(display_, win_, gc_, attrs.width / 2 - 100, attrs.height / 2 - 30,
+    //   200, 60);
+    int p_size = std::max(static_cast<unsigned long>(2), tile_size / 4);
+    std::string text = "GAME OVER";
+    int x_center = attrs.width / 2;
+    int y_center = attrs.height / 2;
+    int char_w = 3 * p_size;
     int char_h = 5 * p_size;
     int spacing = 1 * p_size;
     int total_w = static_cast<int>(text.size()) * (char_w + spacing) - spacing;
@@ -207,18 +213,16 @@ int y_center = attrs.height /2;
     XSetForeground(display_, gc_, 0xFFFFFF);
 
     for (char c : text) {
-        const uint16_t* glyph = glyphs[static_cast<unsigned char>(c)];
-        for (int row = 0; row < 5; ++row) {
-            for (int col = 0; col < 3; ++col) {
-                if (glyph[row] & (1 << (2 - col))) {
-                    XFillRectangle(display_, win_, gc_,
-                                   cur_x + col * p_size,
-                                   cur_y + row * p_size,
-                                   p_size, p_size);
-                }
-            }
+      const uint16_t* glyph = glyphs[static_cast<unsigned char>(c)];
+      for (int row = 0; row < 5; ++row) {
+        for (int col = 0; col < 3; ++col) {
+          if (glyph[row] & (1 << (2 - col))) {
+            XFillRectangle(display_, win_, gc_, cur_x + col * p_size,
+                cur_y + row * p_size, p_size, p_size);
+          }
         }
-        cur_x += char_w + spacing;
+      }
+      cur_x += char_w + spacing;
     }
   }
   XFlush(display_);
@@ -353,7 +357,8 @@ int main() try {
     {"Forest Hacker",   0x83A598, 0x1D2021, 0xB8BB26, 0x98971A, 0x282828, 0xFB4934, 0x3C3836, true, true },
     {"Deep Sea",        0xEEEEEE, 0x001A1A, 0x00FFCC, 0x0088AA, 0x00050A, 0xFF7700, 0x0A1F26, true, true },
     {"Blood Moon",      0xFFFFFF, 0x1A0505, 0xFF0000, 0x800000, 0x0A0000, 0xFFFFFF, 0x221111, true, true },
-    {"Acid Classic",    0xFFFFFF, 0x333300, 0x00FF00, 0x00CC00, 0x000000, 0xFF0000, 0x111111, true, false},
+    //    {"Acid Classic",    0xFFFFFF, 0x333300, 0x00FF00, 0x00CC00, 0x000000, 0xFF0000, 0x111111, true, false},
+    {"Acid Classic",    0xFFFFFF, 0x000000, 0x00FF00, 0x00FF00, 0x000000, 0xFF0000, 0xFF0000, false, false},
   };
   /* clang-format on */
   std::size_t theme_idx = 0;
