@@ -21,13 +21,15 @@ namespace snake {
 
 struct snake::game_theme {
   const char* name;
-  unsigned long border_color;
-  unsigned long guidance_color;
-  unsigned long snake_head_color;
-  unsigned long snake_body_color;
-  unsigned long background_color;
-  unsigned long food_color;
-  unsigned long grid_color;
+  struct {
+    unsigned long border_color;
+    unsigned long guidance_color;
+    unsigned long snake_head_color;
+    unsigned long snake_body_color;
+    unsigned long background_color;
+    unsigned long food_color;
+    unsigned long grid_color;
+  } palette;
   bool show_grid;
   bool show_guidance;
 };
@@ -143,35 +145,35 @@ void snake::x11_view::render(const game_model& model, const game_theme& theme) {
     XSetForeground(display_, gc_, color);
     XFillRectangle(display_, win_, gc_, x_coord, y_coord, tile_size, tile_size);
     if (theme.show_grid) {
-      XSetForeground(display_, gc_, theme.grid_color);
+      XSetForeground(display_, gc_, theme.palette.grid_color);
       XDrawRectangle(display_, win_, gc_, x_coord, y_coord, tile_size, tile_size);
     }
   };
 
-  XSetBackground(display_, gc_, theme.background_color);
+  XSetBackground(display_, gc_, theme.palette.background_color);
   XClearWindow(display_, win_);
 
   const auto food = model.get_food();
   if (theme.show_guidance) {
     for (size_t x = 0; x != model.cols(); ++x) {
-      draw_tile(x, food.y, theme.guidance_color);
+      draw_tile(x, food.y, theme.palette.guidance_color);
     }
     for (size_t y = 0; y != model.rows(); ++y) {
-      draw_tile(food.x, y, theme.guidance_color);
+      draw_tile(food.x, y, theme.palette.guidance_color);
     }
   }
 
-  draw_tile(food.x, food.y, theme.food_color);
+  draw_tile(food.x, food.y, theme.palette.food_color);
 
   const auto& snake = model.get_snake();
   const auto head = snake.front();
-  draw_tile(head.x, head.y, theme.snake_head_color);
+  draw_tile(head.x, head.y, theme.palette.snake_head_color);
   for (auto i = snake.begin() + 1; i != snake.end(); ++i) {
-    draw_tile(i->x, i->y, theme.snake_body_color);
+    draw_tile(i->x, i->y, theme.palette.snake_body_color);
   }
 
   if (theme.show_grid) {
-    XSetForeground(display_, gc_, theme.grid_color);
+    XSetForeground(display_, gc_, theme.palette.grid_color);
     for (size_t x = 0; x != model.cols(); ++x) {
       for (size_t y = 0; y != model.rows(); ++y) {
         const auto x_coord = x * tile_size + x_offset;
@@ -181,7 +183,7 @@ void snake::x11_view::render(const game_model& model, const game_theme& theme) {
     }
   }
 
-  XSetForeground(display_, gc_, theme.border_color);
+  XSetForeground(display_, gc_, theme.palette.border_color);
   XDrawRectangle(display_, win_, gc_, x_offset - 1, y_offset - 1,
       model.cols() * tile_size + 1, model.rows() * tile_size + 1);
 
@@ -353,12 +355,11 @@ int main() try {
   using namespace snake;
   /* clang-format off */
   const std::vector<game_theme> themes = {
-    {"Synthwave Night", 0xCCCCCC, 0x220022, 0x00FFFF, 0x7000FF, 0x050510, 0xFFE000, 0x151525, true, true },
-    {"Forest Hacker",   0x83A598, 0x1D2021, 0xB8BB26, 0x98971A, 0x282828, 0xFB4934, 0x3C3836, true, true },
-    {"Deep Sea",        0xEEEEEE, 0x001A1A, 0x00FFCC, 0x0088AA, 0x00050A, 0xFF7700, 0x0A1F26, true, true },
-    {"Blood Moon",      0xFFFFFF, 0x1A0505, 0xFF0000, 0x800000, 0x0A0000, 0xFFFFFF, 0x221111, true, true },
-    //    {"Acid Classic",    0xFFFFFF, 0x333300, 0x00FF00, 0x00CC00, 0x000000, 0xFF0000, 0x111111, true, false},
-    {"Acid Classic",    0xFFFFFF, 0x000000, 0x00FF00, 0x00FF00, 0x000000, 0xFF0000, 0xFF0000, false, false},
+    {"Synthwave Night", {0xCCCCCC, 0x220022, 0x00FFFF, 0x7000FF, 0x050510, 0xFFE000, 0x151525}, false, true },
+    {"Forest Hacker",   {0x83A598, 0x1D2021, 0xB8BB26, 0x98971A, 0x282828, 0xFB4934, 0x3C3836}, true, true },
+    {"Deep Sea",        {0xEEEEEE, 0x001A1A, 0x00FFCC, 0x0088AA, 0x00050A, 0xFF7700, 0x0A1F26}, true, true },
+    {"Blood Moon",      {0xFFFFFF, 0x1A0505, 0xFF0000, 0x800000, 0x0A0000, 0xFFFFFF, 0x221111}, true, true },
+    {"Acid Classic",    {0xFFFFFF, 0x000000, 0x00FF00, 0x00FF00, 0x000000, 0xFF0000, 0x000000}, false, false},
   };
   /* clang-format on */
   std::size_t theme_idx = 0;
